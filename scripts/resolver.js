@@ -10,7 +10,6 @@
  */
 
 import { ethers } from "ethers";
-import Anthropic from "@anthropic-ai/sdk";
 import * as dotenv from "dotenv";
 import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
@@ -32,10 +31,13 @@ if (!CONTRACT_ADDRESS) {
   process.exit(1);
 }
 
-if (!process.env.ANTHROPIC_API_KEY) {
-  console.error("ERROR: ANTHROPIC_API_KEY not found in .env");
+if (!process.env.OPENROUTER_API_KEY) {
+  console.error("ERROR: OPENROUTER_API_KEY not found in .env");
   process.exit(1);
 }
+
+// Model to use via OpenRouter — easy to swap
+const OPENROUTER_MODEL = "anthropic/claude-opus-4-5";
 
 // ── Load ABI from compiled artifact ───────────────────────────────────────────
 
@@ -91,16 +93,37 @@ async function fetchPriceUSDCents(ticker) {
   return priceCents;
 }
 
-// ── Claude AI event resolver ──────────────────────────────────────────────────
+// ── OpenRouter AI helper ──────────────────────────────────────────────────────
 
-const claude = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+async function askAI(prompt, maxTokens = 300) {
+  const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+      "Content-Type": "application/json",
+      "HTTP-Referer": "https://github.com/PanavMhatre/PredictChain",
+      "X-Title": "PredictChain Resolver",
+    },
+    body: JSON.stringify({
+      model: OPENROUTER_MODEL,
+      max_tokens: maxTokens,
+      messages: [{ role: "user", content: prompt }],
+    }),
+  });
 
-async function resolveEventWithClaude(question, options) {
-  console.log(`  [Claude] Researching: "${question}"`);
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`OpenRouter API error ${res.status}: ${err}`);
+  }
 
-  const optionsList = options
-    .map((opt, i) => `  ${i}: "${opt}"`)
-    .join("\n");
+  const data = await res.json();
+  return data.choices[0].message.content.trim();
+}
+
+async function resolveEventWithAI(question, options) {
+  console.log(`  [AI] Researching: "${question}"`);
+
+  const optionsList = options.map((opt, i) => `  ${i}: "${opt}"`).join("\n");
 
   const prompt = `You are resolving a prediction market. Based on your knowledge of current events, news, and publicly available information, determine the most likely winning outcome.
 
@@ -115,24 +138,14 @@ Instructions:
 - Return ONLY a JSON object in this exact format, nothing else:
 {"winner": <index_number>, "reason": "<brief explanation of why this option wins>"}`;
 
-  const message = await claude.messages.create({
-    model: "claude-opus-4-5",
-    max_tokens: 300,
-    messages: [{ role: "user", content: prompt }],
-  });
+  const raw = await askAI(prompt, 300);
+  console.log(`  [AI] Response: ${raw}`);
 
-  const raw = message.content[0].text.trim();
-  console.log(`  [Claude] Response: ${raw}`);
-
-  try {
-    const parsed = JSON.parse(raw);
-    if (typeof parsed.winner !== "number" || parsed.winner < 0 || parsed.winner >= options.length) {
-      throw new Error(`Invalid winner index: ${parsed.winner}`);
-    }
-    return { winner: parsed.winner, reason: parsed.reason || "Resolved by AI" };
-  } catch {
-    throw new Error(`Could not parse Claude response: ${raw}`);
+  const parsed = JSON.parse(raw);
+  if (typeof parsed.winner !== "number" || parsed.winner < 0 || parsed.winner >= options.length) {
+    throw new Error(`Invalid winner index: ${parsed.winner}`);
   }
+  return { winner: parsed.winner, reason: parsed.reason || "Resolved by AI" };
 }
 
 // ── Price market resolver ─────────────────────────────────────────────────────
@@ -174,14 +187,8 @@ ${optionsList}
 Based on the price outcome, which option index best represents the result?
 Return ONLY JSON: {"winner": <index>, "reason": "<explanation>"}`;
 
-  const message = await claude.messages.create({
-    model: "claude-opus-4-5",
-    max_tokens: 200,
-    messages: [{ role: "user", content: prompt }],
-  });
-
-  const raw = message.content[0].text.trim();
-  console.log(`  [Claude] Price mapping: ${raw}`);
+  const raw = await askAI(prompt, 200);
+  console.log(`  [AI] Price mapping: ${raw}`);
 
   const parsed = JSON.parse(raw);
   winner = parsed.winner;
@@ -239,8 +246,8 @@ async function checkAndResolveMarkets() {
           targetPrice: Number(targetPrice),
         }));
       } else {
-        // EVENT market — ask Claude
-        ({ winner, reason } = await resolveEventWithClaude(question, [...options]));
+        // EVENT market — ask AI via OpenRouter
+        ({ winner, reason } = await resolveEventWithAI(question, [...options]));
       }
 
       console.log(`  >>> Resolving market ${id}: winner option ${winner} — "${options[winner]}"`);
@@ -261,8 +268,9 @@ console.log("=".repeat(60));
 console.log("  PredictChain Auto-Resolver");
 console.log("=".repeat(60));
 console.log(`  Contract:  ${CONTRACT_ADDRESS}`);
-console.log(`  RPC:       ${RPC_URL}`);
-console.log(`  Interval:  ${POLL_INTERVAL_MS / 1000}s`);
+  console.log(`  RPC:       ${RPC_URL}`);
+  console.log(`  Model:     ${OPENROUTER_MODEL} (via OpenRouter)`);
+  console.log(`  Interval:  ${POLL_INTERVAL_MS / 1000}s`);
 console.log("=".repeat(60));
 
 // Run immediately on start, then on interval
