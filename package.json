@@ -7,7 +7,8 @@
     "node": "npx hardhat node",
     "deploy": "npx hardhat run scripts/deploy.js --network localhost",
     "build": "npx hardhat build",
-    "frontend": "cd frontend && npm run dev"
+    "frontend": "cd frontend && npm run dev",
+    "resolve": "node scripts/resolver.js"
   },
   "keywords": [],
   "author": "",
@@ -19,5 +20,9 @@
     "@nomicfoundation/hardhat-toolbox-mocha-ethers": "^3.0.3",
     "ethers": "^6.16.0",
     "hardhat": "^3.1.12"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.78.0",
+    "dotenv": "^17.3.1"
   }
 }

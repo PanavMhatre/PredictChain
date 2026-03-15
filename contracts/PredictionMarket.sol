@@ -4,6 +4,8 @@ pragma solidity ^0.8.24;
 contract PredictionMarket {
     address public owner;
 
+    enum MarketType { EVENT, PRICE }
+
     struct Market {
         string question;
         string[] options;
@@ -12,6 +14,12 @@ contract PredictionMarket {
         uint8 winningOption;
         uint256 totalPool;
         bool exists;
+        MarketType marketType;
+        // For PRICE markets: target price in USD cents (e.g. 20000000 = $200,000)
+        // For EVENT markets: 0
+        uint256 targetPrice;
+        // Ticker symbol for PRICE markets (e.g. "bitcoin"), empty for EVENT
+        string ticker;
     }
 
     uint256 public marketCount;
@@ -27,9 +35,9 @@ contract PredictionMarket {
     // marketId => userAddress => whether they claimed
     mapping(uint256 => mapping(address => bool)) public claimed;
 
-    event MarketCreated(uint256 indexed marketId, string question, string[] options, uint256 deadline);
+    event MarketCreated(uint256 indexed marketId, string question, string[] options, uint256 deadline, MarketType marketType, uint256 targetPrice, string ticker);
     event Voted(uint256 indexed marketId, uint8 optionIndex, address indexed voter, uint256 amount);
-    event MarketResolved(uint256 indexed marketId, uint8 winningOption);
+    event MarketResolved(uint256 indexed marketId, uint8 winningOption, string reason);
     event RewardClaimed(uint256 indexed marketId, address indexed claimer, uint256 amount);
 
     modifier onlyOwner() {
@@ -49,7 +57,10 @@ contract PredictionMarket {
     function createMarket(
         string calldata question,
         string[] calldata options,
-        uint256 deadline
+        uint256 deadline,
+        MarketType marketType,
+        uint256 targetPrice,
+        string calldata ticker
     ) external onlyOwner returns (uint256) {
         require(options.length >= 2 && options.length <= 10, "Need 2-10 options");
         require(deadline > block.timestamp, "Deadline must be in the future");
@@ -61,12 +72,15 @@ contract PredictionMarket {
         m.resolved = false;
         m.totalPool = 0;
         m.exists = true;
+        m.marketType = marketType;
+        m.targetPrice = targetPrice;
+        m.ticker = ticker;
 
         for (uint256 i = 0; i < options.length; i++) {
             m.options.push(options[i]);
         }
 
-        emit MarketCreated(marketId, question, options, deadline);
+        emit MarketCreated(marketId, question, options, deadline, marketType, targetPrice, ticker);
         return marketId;
     }
 
@@ -84,7 +98,7 @@ contract PredictionMarket {
         emit Voted(marketId, optionIndex, msg.sender, msg.value);
     }
 
-    function resolveMarket(uint256 marketId, uint8 winningOption) external onlyOwner marketExists(marketId) {
+    function resolveMarket(uint256 marketId, uint8 winningOption, string calldata reason) external onlyOwner marketExists(marketId) {
         Market storage m = markets[marketId];
         require(!m.resolved, "Already resolved");
         require(winningOption < m.options.length, "Invalid winning option");
@@ -92,7 +106,7 @@ contract PredictionMarket {
         m.resolved = true;
         m.winningOption = winningOption;
 
-        emit MarketResolved(marketId, winningOption);
+        emit MarketResolved(marketId, winningOption, reason);
     }
 
     function claimReward(uint256 marketId) external marketExists(marketId) {
@@ -121,10 +135,13 @@ contract PredictionMarket {
         uint256 deadline,
         bool resolved,
         uint8 winningOption,
-        uint256 totalPool
+        uint256 totalPool,
+        MarketType marketType,
+        uint256 targetPrice,
+        string memory ticker
     ) {
         Market storage m = markets[marketId];
-        return (m.question, m.options, m.deadline, m.resolved, m.winningOption, m.totalPool);
+        return (m.question, m.options, m.deadline, m.resolved, m.winningOption, m.totalPool, m.marketType, m.targetPrice, m.ticker);
     }
 
     function getOptionTotal(uint256 marketId, uint8 optionIndex) external view returns (uint256) {
