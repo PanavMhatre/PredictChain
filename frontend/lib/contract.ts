@@ -30,6 +30,9 @@ export function getReadProvider() {
 }
 
 export function getReadContract() {
+  if (!CONTRACT_ADDRESS) {
+    throw new Error("Contract address not configured. Set NEXT_PUBLIC_CONTRACT_ADDRESS in your environment.");
+  }
   return new ethers.Contract(CONTRACT_ADDRESS, ABI, getReadProvider());
 }
 
