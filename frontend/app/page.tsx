@@ -27,10 +27,13 @@ export default function Home() {
 
   return (
     <div>
-      <h1 className="page-title">Prediction Markets</h1>
-      <p className="page-subtitle">Stake ETH on outcomes. Winners split the pool.</p>
-
-      <WalletStats markets={markets} />
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">Prediction Markets</h1>
+          <p className="page-subtitle">Stake ETH on outcomes. Winners split the pool.</p>
+        </div>
+        <WalletStats markets={markets} />
+      </div>
 
       {loading && <p className="loading-text">Loading markets…</p>}
       {error && <p className="error-msg">{error}</p>}

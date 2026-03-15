@@ -87,13 +87,22 @@ body {
 .main-content { max-width: 1200px; margin: 0 auto; padding: 2rem 1.5rem; }
 
 /* ── Home page ── */
-.page-title { font-size: 2rem; font-weight: 700; margin-bottom: 0.5rem; }
-.page-subtitle { color: var(--text-muted); margin-bottom: 2rem; }
+.page-title { font-size: 2rem; font-weight: 700; margin-bottom: 0.25rem; }
+.page-subtitle { color: var(--text-muted); }
 
 .market-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 1.25rem;
+}
+
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+  flex-wrap: wrap;
 }
 
 .loading-text { color: var(--text-muted); padding: 2rem 0; }
@@ -103,7 +112,6 @@ body {
 .wallet-stats {
   display: flex;
   gap: 1rem;
-  margin-bottom: 2rem;
 }
 
 .wallet-stat-card {
