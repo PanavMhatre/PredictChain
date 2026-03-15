@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { fetchAllMarkets, MarketData } from "../lib/contract";
 import { MarketCard } from "../components/MarketCard";
+import { WalletStats } from "../components/WalletStats";
 import { useMarketEvents } from "../lib/useMarketEvents";
 
 export default function Home() {
@@ -28,6 +29,8 @@ export default function Home() {
     <div>
       <h1 className="page-title">Prediction Markets</h1>
       <p className="page-subtitle">Stake ETH on outcomes. Winners split the pool.</p>
+
+      <WalletStats markets={markets} />
 
       {loading && <p className="loading-text">Loading markets…</p>}
       {error && <p className="error-msg">{error}</p>}
