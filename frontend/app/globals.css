@@ -295,7 +295,14 @@ body {
 .stake-input:focus { outline: none; border-color: var(--primary); }
 
 .claimed-label { font-size: 0.8rem; color: var(--success); }
-.error-msg { font-size: 0.8rem; color: var(--danger); }
+.error-msg {
+  font-size: 0.8rem;
+  color: #fca5a5;
+  background: #2d0f0f;
+  border: 1px solid #7f1d1d;
+  border-radius: var(--radius-sm);
+  padding: 0.4rem 0.75rem;
+}
 
 .connect-prompt {
   text-align: center;

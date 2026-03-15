@@ -30,6 +30,25 @@ export function VotingCell({ market, optionIndex, userStake, hasClaimed, onSucce
   const canVote = !market.resolved && !isDeadlinePassed && signer;
   const canClaim = market.resolved && isWinner && userStake > 0n && !hasClaimed && signer;
 
+  function parseError(e: unknown): string {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (msg.includes("INSUFFICIENT_FUNDS") || msg.includes("insufficient funds"))
+      return "Insufficient funds — you don't have enough ETH to cover this stake + gas.";
+    if (msg.includes("user rejected") || msg.includes("ACTION_REJECTED"))
+      return "Transaction rejected in MetaMask.";
+    if (msg.includes("Market already resolved"))
+      return "This market has already been resolved.";
+    if (msg.includes("Market voting has ended"))
+      return "The voting deadline has passed.";
+    if (msg.includes("Must stake some ETH"))
+      return "Stake amount must be greater than 0.";
+    if (msg.includes("Already claimed"))
+      return "You've already claimed your reward for this market.";
+    if (msg.includes("No winning stake"))
+      return "You didn't stake on the winning option.";
+    return "Transaction failed. Please try again.";
+  }
+
   async function handleVote() {
     if (!signer) return;
     setError("");
@@ -41,7 +60,7 @@ export function VotingCell({ market, optionIndex, userStake, hasClaimed, onSucce
       await tx.wait();
       onSuccess();
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(parseError(e));
     } finally {
       setLoading(false);
     }
@@ -57,7 +76,7 @@ export function VotingCell({ market, optionIndex, userStake, hasClaimed, onSucce
       await tx.wait();
       onSuccess();
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(parseError(e));
     } finally {
       setLoading(false);
     }
