@@ -2,8 +2,9 @@
  * PredictChain Auto-Resolver
  *
  * Polls all markets every 60 seconds. When a market's deadline has passed:
- *   - PRICE markets: fetches current price from CoinGecko, compares to target
- *   - EVENT markets: asks Claude to research the outcome and pick a winner
+ *   - PRICE markets: fetches live price from CoinGecko, AI maps result to option
+ *   - EVENT markets: scrapes real news headlines via DuckDuckGo, feeds them to
+ *                    AI which reasons over the actual current facts to pick a winner
  *
  * Usage:
  *   CONTRACT_ADDRESS=0x... node scripts/resolver.js
@@ -21,25 +22,24 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
-const RPC_URL = process.env.RPC_URL || "http://127.0.0.1:8545";
+const RPC_URL          = process.env.RPC_URL || "http://127.0.0.1:8545";
 const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS;
-const POLL_INTERVAL_MS = 60_000; // check every 60 seconds
+const POLL_INTERVAL_MS = 60_000;
+
+// Model via OpenRouter — swap to any supported model here
+const OPENROUTER_MODEL = "anthropic/claude-opus-4-5";
 
 if (!CONTRACT_ADDRESS) {
   console.error("ERROR: CONTRACT_ADDRESS env var is required.");
   console.error("Run: CONTRACT_ADDRESS=0x... node scripts/resolver.js");
   process.exit(1);
 }
-
 if (!process.env.OPENROUTER_API_KEY) {
   console.error("ERROR: OPENROUTER_API_KEY not found in .env");
   process.exit(1);
 }
 
-// Model to use via OpenRouter — easy to swap
-const OPENROUTER_MODEL = "anthropic/claude-opus-4-5";
-
-// ── Load ABI from compiled artifact ───────────────────────────────────────────
+// ── Load ABI ──────────────────────────────────────────────────────────────────
 
 function loadAbi() {
   const artifactPath = join(
@@ -50,7 +50,7 @@ function loadAbi() {
     const artifact = JSON.parse(readFileSync(artifactPath, "utf8"));
     return artifact.abi;
   } catch {
-    console.error("Could not load ABI. Make sure you've run: npx hardhat build");
+    console.error("Could not load ABI. Run: npx hardhat build");
     process.exit(1);
   }
 }
@@ -58,56 +58,103 @@ function loadAbi() {
 // ── Ethers setup ──────────────────────────────────────────────────────────────
 
 const provider = new ethers.JsonRpcProvider(RPC_URL);
-const abi = loadAbi();
+const abi      = loadAbi();
 
-// Use the first Hardhat test account as the resolver (it's the owner/deployer)
-async function getOwnerWallet() {
+async function getOwnerSigner() {
   const accounts = await provider.listAccounts();
-  if (accounts.length === 0) {
-    throw new Error("No accounts found. Is the Hardhat node running?");
-  }
-  // Hardhat exposes unlocked accounts — use the first one (the deployer/owner)
+  if (!accounts.length) throw new Error("No accounts found. Is the Hardhat node running?");
   return new ethers.JsonRpcSigner(provider, accounts[0].address);
 }
 
-// ── CoinGecko price fetcher ───────────────────────────────────────────────────
+// ── News scraper (DuckDuckGo HTML search — no API key needed) ─────────────────
 
-async function fetchPriceUSDCents(ticker) {
-  const url = `https://api.coingecko.com/api/v3/simple/price?ids=${ticker}&vs_currencies=usd`;
+/**
+ * Searches DuckDuckGo for recent news about a query and returns up to
+ * `maxResults` plain-text snippets. We hit the DuckDuckGo HTML endpoint,
+ * parse out result titles + snippets, and return them as a string block
+ * ready to paste into an AI prompt.
+ */
+async function scrapeNews(query, maxResults = 8) {
+  console.log(`  [News] Searching: "${query}"`);
+
+  const encoded = encodeURIComponent(query);
+  // DuckDuckGo lite HTML — lightweight, no JS, scrapeable
+  const url = `https://html.duckduckgo.com/html/?q=${encoded}&df=w`; // df=w = past week
+
   const res = await fetch(url, {
-    headers: { Accept: "application/json" },
+    headers: {
+      "User-Agent":
+        "Mozilla/5.0 (compatible; PredictChainResolver/1.0; +https://github.com/PanavMhatre/PredictChain)",
+      Accept: "text/html",
+    },
   });
 
-  if (!res.ok) {
-    throw new Error(`CoinGecko API error: ${res.status} ${res.statusText}`);
+  if (!res.ok) throw new Error(`DuckDuckGo fetch failed: ${res.status}`);
+
+  const html = await res.text();
+
+  // Extract result snippets using simple regex on the HTML structure
+  const results = [];
+
+  // Match result titles
+  const titleRe = /class="result__title"[^>]*>.*?<a[^>]*>([^<]+)<\/a>/gs;
+  const snippetRe = /class="result__snippet"[^>]*>([^<]+(?:<[^/][^>]*>[^<]*<\/[^>]+>)*[^<]*)<\/a>/gs;
+
+  // Simpler approach: pull all visible text blocks from result snippets
+  const blockRe = /<a class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g;
+  let match;
+  while ((match = blockRe.exec(html)) !== null && results.length < maxResults) {
+    // Strip inner HTML tags, decode entities
+    const text = match[1]
+      .replace(/<[^>]+>/g, " ")
+      .replace(/&amp;/g, "&")
+      .replace(/&quot;/g, '"')
+      .replace(/&#x27;/g, "'")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (text.length > 30) results.push(text);
   }
 
-  const data = await res.json();
-  if (!data[ticker]?.usd) {
-    throw new Error(`No price data for ticker: ${ticker}`);
+  // Also grab titles for extra context
+  const titleBlock = /<a class="result__a"[^>]*>([\s\S]*?)<\/a>/g;
+  const titles = [];
+  while ((match = titleBlock.exec(html)) !== null && titles.length < maxResults) {
+    const text = match[1].replace(/<[^>]+>/g, "").trim();
+    if (text.length > 10) titles.push(text);
   }
 
-  const priceUSD = data[ticker].usd;
-  const priceCents = Math.round(priceUSD * 100);
-  console.log(`  [CoinGecko] ${ticker}: $${priceUSD.toLocaleString()} (${priceCents} cents)`);
-  return priceCents;
+  if (results.length === 0 && titles.length === 0) {
+    console.log("  [News] No results found — AI will use training knowledge only");
+    return null;
+  }
+
+  // Interleave titles + snippets
+  const combined = titles
+    .slice(0, maxResults)
+    .map((t, i) => `• ${t}${results[i] ? `: ${results[i]}` : ""}`)
+    .join("\n");
+
+  console.log(`  [News] Got ${titles.length} results`);
+  return combined;
 }
 
 // ── OpenRouter AI helper ──────────────────────────────────────────────────────
 
-async function askAI(prompt, maxTokens = 300) {
+async function askAI(prompt, maxTokens = 400) {
   const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+      Authorization:  `Bearer ${process.env.OPENROUTER_API_KEY}`,
       "Content-Type": "application/json",
       "HTTP-Referer": "https://github.com/PanavMhatre/PredictChain",
-      "X-Title": "PredictChain Resolver",
+      "X-Title":      "PredictChain Resolver",
     },
     body: JSON.stringify({
-      model: OPENROUTER_MODEL,
+      model:      OPENROUTER_MODEL,
       max_tokens: maxTokens,
-      messages: [{ role: "user", content: prompt }],
+      messages:   [{ role: "user", content: prompt }],
     }),
   });
 
@@ -120,60 +167,77 @@ async function askAI(prompt, maxTokens = 300) {
   return data.choices[0].message.content.trim();
 }
 
+// ── Event market resolver (news-grounded) ────────────────────────────────────
+
 async function resolveEventWithAI(question, options) {
-  console.log(`  [AI] Researching: "${question}"`);
+  console.log(`  [AI] Resolving event: "${question}"`);
+
+  // Scrape fresh news about the question
+  const newsSnippets = await scrapeNews(question);
 
   const optionsList = options.map((opt, i) => `  ${i}: "${opt}"`).join("\n");
 
-  const prompt = `You are resolving a prediction market. Based on your knowledge of current events, news, and publicly available information, determine the most likely winning outcome.
+  const newsSection = newsSnippets
+    ? `\nHere are recent news headlines and snippets retrieved right now from the web:\n${newsSnippets}\n`
+    : "\n(No recent news found — use your best knowledge.)\n";
 
-Question: ${question}
+  const prompt = `You are an impartial resolver for a prediction market. Your job is to determine which option best reflects reality RIGHT NOW based on the latest available information.
+${newsSection}
+Market question: "${question}"
 
 Options (by index):
 ${optionsList}
 
 Instructions:
-- Reason carefully about what is most likely true based on current world events and news
-- Consider the state of the world as of today
-- Return ONLY a JSON object in this exact format, nothing else:
-{"winner": <index_number>, "reason": "<brief explanation of why this option wins>"}`;
+- Use the news headlines above as your primary source of truth
+- Cross-reference with your own knowledge
+- Pick the option that most accurately reflects the current real-world outcome
+- Return ONLY a JSON object, nothing else:
+{"winner": <index_number>, "reason": "<1-2 sentence explanation citing the evidence>"}`;
 
-  const raw = await askAI(prompt, 300);
+  const raw = await askAI(prompt, 400);
   console.log(`  [AI] Response: ${raw}`);
 
-  const parsed = JSON.parse(raw);
+  // Strip markdown code fences if model wraps JSON in them
+  const cleaned = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
+  const parsed  = JSON.parse(cleaned);
+
   if (typeof parsed.winner !== "number" || parsed.winner < 0 || parsed.winner >= options.length) {
     throw new Error(`Invalid winner index: ${parsed.winner}`);
   }
-  return { winner: parsed.winner, reason: parsed.reason || "Resolved by AI" };
+  return { winner: parsed.winner, reason: parsed.reason || "Resolved by AI with live news" };
 }
 
 // ── Price market resolver ─────────────────────────────────────────────────────
 
+async function fetchPriceUSDCents(ticker) {
+  const url = `https://api.coingecko.com/api/v3/simple/price?ids=${ticker}&vs_currencies=usd`;
+  const res = await fetch(url, { headers: { Accept: "application/json" } });
+  if (!res.ok) throw new Error(`CoinGecko error: ${res.status}`);
+
+  const data = await res.json();
+  if (!data[ticker]?.usd) throw new Error(`No CoinGecko data for: ${ticker}`);
+
+  const priceUSD   = data[ticker].usd;
+  const priceCents = Math.round(priceUSD * 100);
+  console.log(`  [CoinGecko] ${ticker}: $${priceUSD.toLocaleString()} → ${priceCents} cents`);
+  return priceCents;
+}
+
 async function resolvePriceMarket(market) {
   const { question, options, ticker, targetPrice } = market;
-  const targetPriceUSD = targetPrice / 100;
-
-  console.log(`  [Price] Target: $${targetPriceUSD.toLocaleString()} for ${ticker}`);
-
+  const targetPriceUSD  = targetPrice / 100;
   const currentPriceCents = await fetchPriceUSDCents(ticker);
-  const currentPriceUSD = currentPriceCents / 100;
+  const currentPriceUSD   = currentPriceCents / 100;
 
-  // Determine winner based on options structure
-  // We look for options that suggest YES (hit target), NO (didn't), or CLOSE (within 25% below)
-  let winner = 0;
-  let reason = "";
+  const hitTarget     = currentPriceCents >= targetPrice;
+  const closeThresh   = targetPrice * 0.75;
+  const isClose       = currentPriceCents >= closeThresh && !hitTarget;
 
-  const hitTarget = currentPriceCents >= targetPrice;
-  const closeThreshold = targetPrice * 0.75; // within 25% below target
-  const isClose = currentPriceCents >= closeThreshold && currentPriceCents < targetPrice;
-
-  // Try to find the best matching option index
-  // Strategy: ask Claude to map the price outcome to the right option
-  const priceContext = `The market question is: "${question}"
-The target price was $${targetPriceUSD.toLocaleString()}.
-The actual current price of ${ticker} is $${currentPriceUSD.toLocaleString()}.
-Price ${hitTarget ? "HAS" : "has NOT"} reached the target. ${isClose ? "It is close (within 25% of target)." : ""}`;
+  const priceContext = `Market: "${question}"
+Target price: $${targetPriceUSD.toLocaleString()}
+Current price of ${ticker}: $${currentPriceUSD.toLocaleString()}
+Did it hit the target? ${hitTarget ? "YES" : "NO"}${isClose ? " (it is close — within 25% below target)" : ""}`;
 
   console.log(`  [Price] ${priceContext}`);
 
@@ -184,95 +248,93 @@ Price ${hitTarget ? "HAS" : "has NOT"} reached the target. ${isClose ? "It is cl
 Options (by index):
 ${optionsList}
 
-Based on the price outcome, which option index best represents the result?
+Based strictly on the price data above, which option index best represents the outcome?
 Return ONLY JSON: {"winner": <index>, "reason": "<explanation>"}`;
 
-  const raw = await askAI(prompt, 200);
-  console.log(`  [AI] Price mapping: ${raw}`);
+  const raw     = await askAI(prompt, 200);
+  const cleaned = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
+  const parsed  = JSON.parse(cleaned);
 
-  const parsed = JSON.parse(raw);
-  winner = parsed.winner;
-  reason = parsed.reason || `Price is $${currentPriceUSD.toLocaleString()}, target was $${targetPriceUSD.toLocaleString()}`;
-
-  return { winner, reason };
+  console.log(`  [AI] Price mapping: winner=${parsed.winner} — ${parsed.reason}`);
+  return {
+    winner: parsed.winner,
+    reason: parsed.reason || `${ticker} is $${currentPriceUSD.toLocaleString()}, target was $${targetPriceUSD.toLocaleString()}`,
+  };
 }
 
-// ── Main resolution logic ─────────────────────────────────────────────────────
+// ── Main poll loop ────────────────────────────────────────────────────────────
 
 async function checkAndResolveMarkets() {
   console.log(`\n[${new Date().toISOString()}] Checking markets...`);
 
-  const signer = await getOwnerWallet();
-  const contract = new ethers.Contract(CONTRACT_ADDRESS, abi, signer);
-
+  const signer      = await getOwnerSigner();
+  const contract    = new ethers.Contract(CONTRACT_ADDRESS, abi, signer);
   const marketCount = Number(await contract.marketCount());
-  console.log(`  Found ${marketCount} markets`);
+  const now         = Math.floor(Date.now() / 1000);
 
-  const now = Math.floor(Date.now() / 1000);
+  console.log(`  Found ${marketCount} market(s)`);
 
   for (let id = 0; id < marketCount; id++) {
     try {
-      const market = await contract.getMarket(id);
-      const [question, options, deadline, resolved, , totalPool, marketType, targetPrice, ticker] = market;
-
-      const deadlineTs = Number(deadline);
-      const isExpired = now >= deadlineTs;
-      const poolETH = ethers.formatEther(totalPool);
+      const m = await contract.getMarket(id);
+      const [question, options, deadline, resolved, , totalPool, marketType, targetPrice, ticker] = m;
 
       if (resolved) {
-        console.log(`  Market ${id}: already resolved, skipping`);
+        console.log(`  Market ${id}: already resolved`);
         continue;
       }
 
-      if (!isExpired) {
+      const deadlineTs = Number(deadline);
+      if (now < deadlineTs) {
         const remaining = deadlineTs - now;
-        const hours = Math.floor(remaining / 3600);
-        const days = Math.floor(hours / 24);
-        console.log(`  Market ${id}: "${question.slice(0, 50)}..." — expires in ${days}d ${hours % 24}h`);
+        const days  = Math.floor(remaining / 86400);
+        const hours = Math.floor((remaining % 86400) / 3600);
+        console.log(`  Market ${id}: "${question.slice(0, 55)}..." — expires in ${days}d ${hours}h`);
         continue;
       }
 
-      console.log(`\n  >>> Market ${id} EXPIRED: "${question}"`);
-      console.log(`      Total pool: ${poolETH} ETH | Type: ${marketType === 0n ? "EVENT" : "PRICE"}`);
+      const poolETH  = ethers.formatEther(totalPool);
+      const typeLabel = marketType === 0n ? "EVENT" : "PRICE";
+      console.log(`\n  >>> Market ${id} EXPIRED [${typeLabel}]: "${question}"`);
+      console.log(`      Pool: ${poolETH} ETH`);
 
       let winner, reason;
 
       if (marketType === 1n) {
-        // PRICE market
         ({ winner, reason } = await resolvePriceMarket({
           question,
-          options: [...options],
+          options:     [...options],
           ticker,
           targetPrice: Number(targetPrice),
         }));
       } else {
-        // EVENT market — ask AI via OpenRouter
         ({ winner, reason } = await resolveEventWithAI(question, [...options]));
       }
 
-      console.log(`  >>> Resolving market ${id}: winner option ${winner} — "${options[winner]}"`);
+      console.log(`  >>> Winner: option ${winner} — "${options[winner]}"`);
       console.log(`  >>> Reason: ${reason}`);
 
       const tx = await contract.resolveMarket(id, winner, reason);
       await tx.wait();
-      console.log(`  >>> Market ${id} resolved! TX: ${tx.hash}`);
+      console.log(`  >>> Resolved! TX: ${tx.hash}`);
+
     } catch (err) {
-      console.error(`  ERROR processing market ${id}:`, err.message);
+      console.error(`  ERROR on market ${id}:`, err.message);
     }
   }
 }
 
-// ── Entry point ───────────────────────────────────────────────────────────────
+// ── Boot ──────────────────────────────────────────────────────────────────────
 
 console.log("=".repeat(60));
 console.log("  PredictChain Auto-Resolver");
 console.log("=".repeat(60));
-console.log(`  Contract:  ${CONTRACT_ADDRESS}`);
-  console.log(`  RPC:       ${RPC_URL}`);
-  console.log(`  Model:     ${OPENROUTER_MODEL} (via OpenRouter)`);
-  console.log(`  Interval:  ${POLL_INTERVAL_MS / 1000}s`);
+console.log(`  Contract : ${CONTRACT_ADDRESS}`);
+console.log(`  RPC      : ${RPC_URL}`);
+console.log(`  Model    : ${OPENROUTER_MODEL} (via OpenRouter)`);
+console.log(`  News     : DuckDuckGo live search (no API key needed)`);
+console.log(`  Interval : ${POLL_INTERVAL_MS / 1000}s`);
 console.log("=".repeat(60));
 
-// Run immediately on start, then on interval
 checkAndResolveMarkets().catch(console.error);
 setInterval(() => checkAndResolveMarkets().catch(console.error), POLL_INTERVAL_MS);
