@@ -12,7 +12,7 @@ import type { TypedContractEvent, TypedDeferredTopicFilter, TypedEventLog, Typed
 
     encodeFunctionData(functionFragment: 'claimReward', values: [BigNumberish]): string;
 encodeFunctionData(functionFragment: 'claimed', values: [BigNumberish, AddressLike]): string;
-encodeFunctionData(functionFragment: 'createMarket', values: [string, string[], BigNumberish]): string;
+encodeFunctionData(functionFragment: 'createMarket', values: [string, string[], BigNumberish, BigNumberish, BigNumberish, string]): string;
 encodeFunctionData(functionFragment: 'getMarket', values: [BigNumberish]): string;
 encodeFunctionData(functionFragment: 'getOptionTotal', values: [BigNumberish, BigNumberish]): string;
 encodeFunctionData(functionFragment: 'getUserStake', values: [BigNumberish, BigNumberish, AddressLike]): string;
@@ -21,7 +21,7 @@ encodeFunctionData(functionFragment: 'marketCount', values?: undefined): string;
 encodeFunctionData(functionFragment: 'markets', values: [BigNumberish]): string;
 encodeFunctionData(functionFragment: 'optionTotals', values: [BigNumberish, BigNumberish]): string;
 encodeFunctionData(functionFragment: 'owner', values?: undefined): string;
-encodeFunctionData(functionFragment: 'resolveMarket', values: [BigNumberish, BigNumberish]): string;
+encodeFunctionData(functionFragment: 'resolveMarket', values: [BigNumberish, BigNumberish, string]): string;
 encodeFunctionData(functionFragment: 'stakes', values: [BigNumberish, BigNumberish, AddressLike]): string;
 encodeFunctionData(functionFragment: 'vote', values: [BigNumberish, BigNumberish]): string;
 
@@ -43,9 +43,9 @@ decodeFunctionResult(functionFragment: 'vote', data: BytesLike): Result;
 
   
     export namespace MarketCreatedEvent {
-      export type InputTuple = [marketId: BigNumberish, question: string, options: string[], deadline: BigNumberish];
-      export type OutputTuple = [marketId: bigint, question: string, options: string[], deadline: bigint];
-      export interface OutputObject {marketId: bigint, question: string, options: string[], deadline: bigint };
+      export type InputTuple = [marketId: BigNumberish, question: string, options: string[], deadline: BigNumberish, marketType: BigNumberish, targetPrice: BigNumberish, ticker: string];
+      export type OutputTuple = [marketId: bigint, question: string, options: string[], deadline: bigint, marketType: bigint, targetPrice: bigint, ticker: string];
+      export interface OutputObject {marketId: bigint, question: string, options: string[], deadline: bigint, marketType: bigint, targetPrice: bigint, ticker: string };
       export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>
       export type Filter = TypedDeferredTopicFilter<Event>
       export type Log = TypedEventLog<Event>
@@ -55,9 +55,9 @@ decodeFunctionResult(functionFragment: 'vote', data: BytesLike): Result;
   
 
     export namespace MarketResolvedEvent {
-      export type InputTuple = [marketId: BigNumberish, winningOption: BigNumberish];
-      export type OutputTuple = [marketId: bigint, winningOption: bigint];
-      export interface OutputObject {marketId: bigint, winningOption: bigint };
+      export type InputTuple = [marketId: BigNumberish, winningOption: BigNumberish, reason: string];
+      export type OutputTuple = [marketId: bigint, winningOption: bigint, reason: string];
+      export interface OutputObject {marketId: bigint, winningOption: bigint, reason: string };
       export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>
       export type Filter = TypedDeferredTopicFilter<Event>
       export type Log = TypedEventLog<Event>
@@ -141,7 +141,7 @@ decodeFunctionResult(functionFragment: 'vote', data: BytesLike): Result;
 
     
     createMarket: TypedContractMethod<
-      [question: string, options: string[], deadline: BigNumberish, ],
+      [question: string, options: string[], deadline: BigNumberish, marketType: BigNumberish, targetPrice: BigNumberish, ticker: string, ],
       [bigint],
       'nonpayable'
     >
@@ -150,7 +150,7 @@ decodeFunctionResult(functionFragment: 'vote', data: BytesLike): Result;
     
     getMarket: TypedContractMethod<
       [marketId: BigNumberish, ],
-      [[string, string[], bigint, boolean, bigint, bigint] & {question: string, options: string[], deadline: bigint, resolved: boolean, winningOption: bigint, totalPool: bigint }],
+      [[string, string[], bigint, boolean, bigint, bigint, bigint, bigint, string] & {question: string, options: string[], deadline: bigint, resolved: boolean, winningOption: bigint, totalPool: bigint, marketType: bigint, targetPrice: bigint, ticker: string }],
       'view'
     >
     
@@ -190,7 +190,7 @@ decodeFunctionResult(functionFragment: 'vote', data: BytesLike): Result;
     
     markets: TypedContractMethod<
       [arg0: BigNumberish, ],
-      [[string, bigint, boolean, bigint, bigint, boolean] & {question: string, deadline: bigint, resolved: boolean, winningOption: bigint, totalPool: bigint, exists: boolean }],
+      [[string, bigint, boolean, bigint, bigint, boolean, bigint, bigint, string] & {question: string, deadline: bigint, resolved: boolean, winningOption: bigint, totalPool: bigint, exists: boolean, marketType: bigint, targetPrice: bigint, ticker: string }],
       'view'
     >
     
@@ -213,7 +213,7 @@ decodeFunctionResult(functionFragment: 'vote', data: BytesLike): Result;
 
     
     resolveMarket: TypedContractMethod<
-      [marketId: BigNumberish, winningOption: BigNumberish, ],
+      [marketId: BigNumberish, winningOption: BigNumberish, reason: string, ],
       [void],
       'nonpayable'
     >
@@ -249,13 +249,13 @@ getFunction(nameOrSignature: 'claimed'): TypedContractMethod<
       'view'
     >;
 getFunction(nameOrSignature: 'createMarket'): TypedContractMethod<
-      [question: string, options: string[], deadline: BigNumberish, ],
+      [question: string, options: string[], deadline: BigNumberish, marketType: BigNumberish, targetPrice: BigNumberish, ticker: string, ],
       [bigint],
       'nonpayable'
     >;
 getFunction(nameOrSignature: 'getMarket'): TypedContractMethod<
       [marketId: BigNumberish, ],
-      [[string, string[], bigint, boolean, bigint, bigint] & {question: string, options: string[], deadline: bigint, resolved: boolean, winningOption: bigint, totalPool: bigint }],
+      [[string, string[], bigint, boolean, bigint, bigint, bigint, bigint, string] & {question: string, options: string[], deadline: bigint, resolved: boolean, winningOption: bigint, totalPool: bigint, marketType: bigint, targetPrice: bigint, ticker: string }],
       'view'
     >;
 getFunction(nameOrSignature: 'getOptionTotal'): TypedContractMethod<
@@ -280,7 +280,7 @@ getFunction(nameOrSignature: 'marketCount'): TypedContractMethod<
     >;
 getFunction(nameOrSignature: 'markets'): TypedContractMethod<
       [arg0: BigNumberish, ],
-      [[string, bigint, boolean, bigint, bigint, boolean] & {question: string, deadline: bigint, resolved: boolean, winningOption: bigint, totalPool: bigint, exists: boolean }],
+      [[string, bigint, boolean, bigint, bigint, boolean, bigint, bigint, string] & {question: string, deadline: bigint, resolved: boolean, winningOption: bigint, totalPool: bigint, exists: boolean, marketType: bigint, targetPrice: bigint, ticker: string }],
       'view'
     >;
 getFunction(nameOrSignature: 'optionTotals'): TypedContractMethod<
@@ -294,7 +294,7 @@ getFunction(nameOrSignature: 'owner'): TypedContractMethod<
       'view'
     >;
 getFunction(nameOrSignature: 'resolveMarket'): TypedContractMethod<
-      [marketId: BigNumberish, winningOption: BigNumberish, ],
+      [marketId: BigNumberish, winningOption: BigNumberish, reason: string, ],
       [void],
       'nonpayable'
     >;
@@ -316,11 +316,11 @@ getEvent(key: 'Voted'): TypedContractEvent<VotedEvent.InputTuple, VotedEvent.Out
 
     filters: {
       
-      'MarketCreated(uint256,string,string[],uint256)': TypedContractEvent<MarketCreatedEvent.InputTuple, MarketCreatedEvent.OutputTuple, MarketCreatedEvent.OutputObject>;
+      'MarketCreated(uint256,string,string[],uint256,uint8,uint256,string)': TypedContractEvent<MarketCreatedEvent.InputTuple, MarketCreatedEvent.OutputTuple, MarketCreatedEvent.OutputObject>;
       MarketCreated: TypedContractEvent<MarketCreatedEvent.InputTuple, MarketCreatedEvent.OutputTuple, MarketCreatedEvent.OutputObject>;
     
 
-      'MarketResolved(uint256,uint8)': TypedContractEvent<MarketResolvedEvent.InputTuple, MarketResolvedEvent.OutputTuple, MarketResolvedEvent.OutputObject>;
+      'MarketResolved(uint256,uint8,string)': TypedContractEvent<MarketResolvedEvent.InputTuple, MarketResolvedEvent.OutputTuple, MarketResolvedEvent.OutputObject>;
       MarketResolved: TypedContractEvent<MarketResolvedEvent.InputTuple, MarketResolvedEvent.OutputTuple, MarketResolvedEvent.OutputObject>;
     
 
