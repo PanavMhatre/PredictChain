@@ -1,14 +1,14 @@
 # PredictChain — Voting-Based Blockchain Prediction Market
 
-A full-stack decentralized prediction market built with Solidity, Hardhat, Ethers.js, and Next.js. Uses **fake ETH** on a local Hardhat network — no real money involved. Markets resolve **automatically** using live data and AI reasoning — no manual intervention required.
+A full-stack decentralized prediction market built with Solidity, Hardhat, Ethers.js, and Next.js. Supports a **local Hardhat network** for development and the **Sepolia testnet** for public deployment. Markets resolve **automatically** using live data and AI reasoning — no manual intervention required.
 
 ## How It Works
 
 - **Markets** are prediction questions with multiple outcome options ("cells")
-- **Users stake fake FETH** on their predicted outcome
+- **Users stake ETH** on their predicted outcome
 - **Winners split the entire pool** proportional to their stake
 - **Markets resolve automatically** once their deadline passes — the resolver daemon fetches live data and uses AI to determine the correct outcome and call `resolveMarket` on-chain
-- Everything runs on a local Hardhat blockchain — 10 accounts each preloaded with 10,000 fake ETH
+- Locally, runs on a Hardhat node with 10 accounts each preloaded with 10,000 fake ETH; on testnet, runs on Sepolia using real Sepolia ETH (free from faucets)
 
 ## Market Types
 
@@ -28,7 +28,13 @@ Crypto price predictions (e.g. "Will Bitcoin hit $200,000?"). When the deadline 
 
 ## Quick Start
 
-### 1. Start the Hardhat Local Node
+Two options: run everything locally with a Hardhat node, or deploy to the public Sepolia testnet.
+
+---
+
+### Option A — Local Hardhat Network
+
+#### 1. Start the Hardhat Local Node
 
 ```bash
 npm run node
@@ -36,7 +42,7 @@ npm run node
 
 Keep this running. It will print 10 test account addresses and private keys.
 
-### 2. Deploy the Contract & Seed Markets
+#### 2. Deploy the Contract & Seed Markets
 
 In a new terminal:
 
@@ -44,11 +50,11 @@ In a new terminal:
 npm run deploy
 ```
 
-Copy the contract address printed (e.g. `0x5FbDB2315678afecb367f032d93F642f64180aa3`)
+This deploys to `localhost` (chain ID `31337`) and seeds 4 sample markets. Copy the contract address from the output.
 
-### 3. Configure the Frontend
+#### 3. Configure the Frontend
 
-Edit `frontend/.env.local`:
+Create `frontend/.env.local`:
 
 ```
 NEXT_PUBLIC_CONTRACT_ADDRESS=<paste address here>
@@ -56,38 +62,91 @@ NEXT_PUBLIC_CHAIN_ID=31337
 NEXT_PUBLIC_RPC_URL=http://127.0.0.1:8545
 ```
 
-### 4. Run the Frontend
+#### 4. Set Up MetaMask
+
+1. Install the MetaMask browser extension
+2. Add a custom network:
+   - **Network Name**: Hardhat Local
+   - **RPC URL**: `http://127.0.0.1:8545`
+   - **Chain ID**: `31337`
+   - **Currency Symbol**: `ETH`
+3. Import a test account using a private key from the Hardhat node output
+
+#### 5. Run the Frontend
 
 ```bash
-cd frontend
-npm run dev
+npm run frontend
 ```
 
 Open [http://localhost:3000](http://localhost:3000)
 
-### 5. Set Up MetaMask
+#### 6. Start the Auto-Resolver
 
-1. Install MetaMask browser extension
-2. Add a new network:
-   - **Network Name**: Hardhat Local
-   - **RPC URL**: http://127.0.0.1:8545
-   - **Chain ID**: 31337
-   - **Currency Symbol**: FETH
-3. Import a test account using a private key from the Hardhat node output
-
-### 6. Start the Auto-Resolver
-
-In a new terminal, add your OpenRouter API key to `.env`:
+Add your OpenRouter API key to `.env`:
 
 ```
 OPENROUTER_API_KEY=sk-or-...
 ```
 
-Then run:
+Then in a new terminal:
 
 ```bash
-CONTRACT_ADDRESS=<paste address here> node scripts/resolver.js
+CONTRACT_ADDRESS=<paste address here> npm run resolve
 ```
+
+---
+
+### Option B — Sepolia Testnet
+
+#### 1. Configure `.env`
+
+```
+OPENROUTER_API_KEY=sk-or-...
+SEPOLIA_RPC_URL=https://eth-sepolia.g.alchemy.com/v2/<your-alchemy-key>
+SEPOLIA_PRIVATE_KEY=0x<your-wallet-private-key>
+```
+
+Get free Sepolia ETH from a faucet (e.g. [sepoliafaucet.com](https://sepoliafaucet.com)) before deploying.
+
+#### 2. Deploy to Sepolia
+
+```bash
+npm run deploy:sepolia
+```
+
+Copy the contract address from the output.
+
+#### 3. Configure the Frontend
+
+Create `frontend/.env.local`:
+
+```
+NEXT_PUBLIC_CONTRACT_ADDRESS=<paste address here>
+NEXT_PUBLIC_CHAIN_ID=11155111
+NEXT_PUBLIC_RPC_URL=https://eth-sepolia.g.alchemy.com/v2/<your-alchemy-key>
+```
+
+#### 4. Set Up MetaMask
+
+Switch MetaMask to the **Sepolia** network (it's built in — just enable testnets in settings). Use the same wallet whose private key you added to `.env`.
+
+#### 5. Run the Frontend
+
+```bash
+npm run frontend
+```
+
+Open [http://localhost:3000](http://localhost:3000)
+
+#### 6. Start the Auto-Resolver
+
+```bash
+CONTRACT_ADDRESS=<paste address here> RPC_URL=https://eth-sepolia.g.alchemy.com/v2/<your-alchemy-key> npm run resolve
+```
+
+The resolver uses the `SEPOLIA_PRIVATE_KEY` account (account[0] on local) to call `resolveMarket` on-chain, so ensure that wallet has enough Sepolia ETH to cover gas.
+
+---
 
 The resolver polls all markets every 60 seconds. When a market's deadline passes it fetches live data, calls the AI, and resolves the market on-chain automatically.
 
@@ -158,10 +217,12 @@ The resolver is a Node.js daemon that runs independently of the frontend.
 | News source | DuckDuckGo HTML search — past week, no API key needed |
 | Price source | CoinGecko public API |
 
-**Required environment variables:**
+**Required environment variables (in `.env` or passed inline):**
 - `CONTRACT_ADDRESS` — address of the deployed contract
-- `OPENROUTER_API_KEY` — your OpenRouter key
-- `RPC_URL` *(optional)* — defaults to `http://127.0.0.1:8545`
+- `OPENROUTER_API_KEY` — your OpenRouter key (in `.env`)
+- `RPC_URL` *(optional)* — defaults to `http://127.0.0.1:8545`; override for Sepolia
+
+**npm script:** `npm run resolve` (runs `node scripts/resolver.js`)
 
 ## Seeded Markets
 
