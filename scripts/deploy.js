@@ -75,10 +75,11 @@ async function main() {
   console.log("Created market 3: Ethereum price prediction (PRICE type, target $10k)");
 
   console.log("\nAll markets seeded! Contract address:", contractAddress);
+  const isSepolia = hre.network.name === "sepolia";
   console.log("\nAdd this to your frontend .env.local:");
   console.log(`NEXT_PUBLIC_CONTRACT_ADDRESS=${contractAddress}`);
-  console.log("NEXT_PUBLIC_CHAIN_ID=31337");
-  console.log("NEXT_PUBLIC_RPC_URL=http://127.0.0.1:8545");
+  console.log(`NEXT_PUBLIC_CHAIN_ID=${isSepolia ? "11155111" : "31337"}`);
+  console.log(`NEXT_PUBLIC_RPC_URL=${isSepolia ? process.env.SEPOLIA_RPC_URL : "http://127.0.0.1:8545"}`);
   console.log("\nThen start the resolver in a new terminal:");
   console.log(`CONTRACT_ADDRESS=${contractAddress} node scripts/resolver.js`);
 }
