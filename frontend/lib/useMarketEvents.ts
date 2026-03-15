@@ -1,29 +1,25 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { getReadProvider } from "./contract";
+import { useEffect } from "react";
+import { ethers } from "ethers";
+import { getReadContract } from "./contract";
 
-// Polls for new blocks every 12 seconds (≈ Sepolia block time).
-// Works with plain HTTP RPC endpoints (no WebSocket needed).
-// On local Hardhat it fires immediately on any new block.
 export function useMarketEvents(onUpdate: () => void) {
-  const onUpdateRef = useRef(onUpdate);
-  onUpdateRef.current = onUpdate;
-
   useEffect(() => {
-    let destroyed = false;
-    const provider = getReadProvider();
+    const contract = getReadContract();
 
-    function handleBlock() {
-      if (!destroyed) onUpdateRef.current();
-    }
+    const handleVoted = () => onUpdate();
+    const handleResolved = () => onUpdate();
+    const handleClaimed = () => onUpdate();
 
-    provider.on("block", handleBlock);
+    contract.on("Voted", handleVoted);
+    contract.on("MarketResolved", handleResolved);
+    contract.on("RewardClaimed", handleClaimed);
 
     return () => {
-      destroyed = true;
-      provider.off("block", handleBlock);
-      provider.destroy();
+      contract.off("Voted", handleVoted);
+      contract.off("MarketResolved", handleResolved);
+      contract.off("RewardClaimed", handleClaimed);
     };
-  }, []);
+  }, [onUpdate]);
 }
