@@ -108,6 +108,27 @@ export const ABI = [
     type: "function",
   },
   {
+    inputs: [],
+    name: "owner",
+    outputs: [{ internalType: "address", name: "", type: "address" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      { internalType: "string", name: "question", type: "string" },
+      { internalType: "string[]", name: "options", type: "string[]" },
+      { internalType: "uint256", name: "deadline", type: "uint256" },
+      { internalType: "uint8", name: "marketType", type: "uint8" },
+      { internalType: "uint256", name: "targetPrice", type: "uint256" },
+      { internalType: "string", name: "ticker", type: "string" },
+    ],
+    name: "createMarket",
+    outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
     inputs: [
       { internalType: "uint256", name: "marketId", type: "uint256" },
       { internalType: "uint8", name: "optionIndex", type: "uint8" },
