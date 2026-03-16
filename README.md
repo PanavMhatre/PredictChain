@@ -2,7 +2,7 @@
 
 > **Decentralized prediction markets on Ethereum — fully on-chain, AI-resolved, no oracles required.**
 
-Live on Sepolia testnet → [predict-chain-sigma.vercel.app](https://predict-chain-sigma.vercel.app)
+Live on Sepolia testnet → [predictchainmarket.vercel.app](https://predictchainmarket.vercel.app)
 
 ---
 
