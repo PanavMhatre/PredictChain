@@ -51,12 +51,12 @@ export default function Home() {
           <p className="page-subtitle">Stake ETH on outcomes. Winners split the pool.</p>
         </div>
         <div className="page-header-right">
-          <WalletStats markets={markets} />
           {isOwner && (
             <button className="btn btn-primary btn-create" onClick={() => setShowCreate(true)}>
               + New Market
             </button>
           )}
+          <WalletStats markets={markets} />
         </div>
       </div>
 
