@@ -27,12 +27,12 @@ When a market deadline passes, the resolver daemon automatically:
 **For PRICE markets** (e.g. "Will Bitcoin hit $200k?")
 1. Fetches the live spot price from the [CoinGecko](https://coingecko.com) public API
 2. Compares against the market's `targetPrice` threshold
-3. Sends price data + options to Claude via [OpenRouter](https://openrouter.ai) — the AI maps the result to the correct option
+3. Sends price data + options to [OpenRouter](https://openrouter.ai) — the AI maps the result to the correct option
 4. Calls `resolveMarket()` on-chain with the winner index and a human-readable reason
 
 **For EVENT markets** (e.g. "Who wins the World Cup?")
 1. Scrapes live news headlines from DuckDuckGo — no API key required, past-week filter
-2. Feeds the question, options, and news context to Claude via OpenRouter
+2. Feeds the question, options, and news context to [OpenRouter](https://openrouter.ai)
 3. The AI reasons over current real-world facts and returns the winning option
 4. Calls `resolveMarket()` on-chain with the winner index and reasoning
 
@@ -128,7 +128,7 @@ The resolver (`scripts/resolver.js`) is a standalone Node.js daemon that monitor
 | Property | Value |
 |---|---|
 | Poll interval | 60 seconds |
-| AI model | `anthropic/claude-opus-4-5` via OpenRouter |
+| AI model | OpenRouter |
 | Price source | CoinGecko public REST API (no key required) |
 | News source | DuckDuckGo HTML search — past week, no API key required |
 | Resolution method | AI-grounded — cites live data in the on-chain reason string |
@@ -285,7 +285,7 @@ npm run resolve
 | Contract interaction | Ethers.js v6 |
 | Frontend | Next.js 15 (App Router), TypeScript, React 19 |
 | Wallet | MetaMask via `BrowserProvider` |
-| Resolver AI | Claude (claude-opus-4-5) via OpenRouter |
+| Resolver AI | OpenRouter |
 | Price data | CoinGecko public API |
 | News data | DuckDuckGo HTML scrape |
 | Testnet | Ethereum Sepolia (chain ID 11155111) |
