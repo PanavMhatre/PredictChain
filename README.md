@@ -322,7 +322,3 @@ To enable: go to your Vercel project → **Storage** → **Create Database** →
 | Hosting | Vercel |
 
 ---
-
-## License
-
-MIT
