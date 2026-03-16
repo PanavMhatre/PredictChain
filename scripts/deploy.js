@@ -74,6 +74,66 @@ async function main() {
   await tx4.wait();
   console.log("Created market 3: Ethereum price prediction (PRICE type, target $10k)");
 
+  // PRICE market: Solana hits $500
+  const tx5 = await market.createMarket(
+    "Will Solana hit $500 by end of 2026?",
+    ["Yes, SOL is going parabolic", "No, it won't reach $500", "Close ($400-$499)"],
+    now + oneWeek * 52,
+    MarketType.PRICE,
+    50_000,       // $500 in cents
+    "solana"      // CoinGecko ID
+  );
+  await tx5.wait();
+  console.log("Created market 4: Solana price prediction (PRICE type, target $500)");
+
+  // EVENT market: US Recession
+  const tx6 = await market.createMarket(
+    "Will the US enter a recession in 2026?",
+    ["Yes, recession confirmed", "No, economy stays strong", "Mild slowdown but no recession"],
+    now + oneWeek * 52,
+    MarketType.EVENT,
+    0,
+    ""
+  );
+  await tx6.wait();
+  console.log("Created market 5: US recession prediction (EVENT type)");
+
+  // EVENT market: Next iPhone
+  const tx7 = await market.createMarket(
+    "What will be the biggest iPhone 17 feature?",
+    ["Foldable form factor", "Under-display Face ID", "Titanium & thinner design", "AI-native Siri overhaul", "Periscope zoom on all models"],
+    now + oneWeek * 30,
+    MarketType.EVENT,
+    0,
+    ""
+  );
+  await tx7.wait();
+  console.log("Created market 6: iPhone 17 feature prediction (EVENT type)");
+
+  // PRICE market: Gold hits $4000
+  const tx8 = await market.createMarket(
+    "Will Gold hit $4,000/oz by end of 2026?",
+    ["Yes, gold keeps surging", "No, it will pull back", "Reaches $3,500 but not $4,000"],
+    now + oneWeek * 52,
+    MarketType.PRICE,
+    400_000,      // $4,000 in cents
+    "gold"        // CoinGecko ID
+  );
+  await tx8.wait();
+  console.log("Created market 7: Gold price prediction (PRICE type, target $4,000)");
+
+  // EVENT market: FIFA World Cup top scorer
+  const tx9 = await market.createMarket(
+    "Who will be the top scorer at the 2026 World Cup?",
+    ["Kylian Mbappé", "Erling Haaland", "Vinicius Jr.", "Harry Kane", "Someone unexpected"],
+    now + oneWeek * 52,
+    MarketType.EVENT,
+    0,
+    ""
+  );
+  await tx9.wait();
+  console.log("Created market 8: World Cup top scorer prediction (EVENT type)");
+
   console.log("\nAll markets seeded! Contract address:", contractAddress);
   const isSepolia = hre.network.name === "sepolia";
   console.log("\nAdd this to your frontend .env.local:");
