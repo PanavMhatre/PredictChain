@@ -6,7 +6,12 @@ import { getReadContract } from "./contract";
 
 export function useMarketEvents(onUpdate: () => void) {
   useEffect(() => {
-    const contract = getReadContract();
+    let contract: ethers.Contract;
+    try {
+      contract = getReadContract();
+    } catch {
+      return;
+    }
 
     const handleVoted = () => onUpdate();
     const handleResolved = () => onUpdate();
