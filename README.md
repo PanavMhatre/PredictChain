@@ -56,12 +56,18 @@ PredictChain/
 │   ├── app/
 │   │   ├── page.tsx              # Market grid — live balance + staked stats
 │   │   └── market/[id]/page.tsx  # Market detail — voting cells + claim flow
+│   ├── app/
+│   │   ├── api/
+│   │   │   └── suggestions/route.ts  # REST API — submit/list/dismiss/delete suggestions
 │   ├── components/
-│   │   ├── Navbar.tsx            # Sticky nav with live ETH balance pill
-│   │   ├── WalletConnect.tsx     # MetaMask connect / disconnect / network check
-│   │   ├── WalletStats.tsx       # Balance + total staked cards on home page
-│   │   ├── MarketCard.tsx        # Market grid card with option bars + status
-│   │   └── VotingCell.tsx        # Per-option stake input + claim button
+│   │   ├── Navbar.tsx                # Sticky nav with live ETH balance pill
+│   │   ├── WalletConnect.tsx         # MetaMask connect / disconnect / network check
+│   │   ├── WalletStats.tsx           # Balance + total staked cards on home page
+│   │   ├── MarketCard.tsx            # Market grid card with option bars + status
+│   │   ├── VotingCell.tsx            # Per-option stake input + claim button
+│   │   ├── CreateMarketModal.tsx     # Owner-only modal to create a new market
+│   │   ├── SuggestMarketModal.tsx    # User-facing modal to suggest a market idea
+│   │   └── SuggestionsPanel.tsx      # Owner panel to review, dismiss, or use suggestions
 │   └── lib/
 │       ├── abi.ts                # Contract ABI
 │       ├── contract.ts           # Ethers.js read/write helpers + data fetching
@@ -87,7 +93,7 @@ PredictChain/
 
 | Function | Visibility | Description |
 |---|---|---|
-| `createMarket(question, options[], deadline, marketType, targetPrice, ticker)` | `onlyOwner` | Create a new prediction market |
+| `createMarket(question, options[], deadline, marketType, targetPrice, ticker)` | `onlyOwner` | Create a new prediction market (also triggerable from the UI) |
 | `vote(marketId, optionIndex)` | `payable` | Stake ETH on an outcome |
 | `resolveMarket(marketId, winningOption, reason)` | `onlyOwner` | Resolve with winner + explanation string |
 | `claimReward(marketId)` | public | Claim proportional payout if on winning side |
@@ -277,6 +283,29 @@ npm run resolve
 
 ---
 
+## Market Creation & Suggestions
+
+PredictChain uses a two-tier system for adding new markets:
+
+| Role | What they see | What it does |
+|---|---|---|
+| **Owner wallet** | `+ New Market` button | Opens a full creation form — question, 2–10 options, type (EVENT/PRICE), deadline, optional target price/ticker. Calls `createMarket()` on-chain directly. |
+| **Owner wallet** | `Suggestions` button (with live pending badge) | Opens a review panel showing all user-submitted ideas. Owner can use an idea (pre-fills the creation form), dismiss it, or delete it entirely. |
+| **Any other wallet** | `+ Suggest Market` button | Opens a lightweight form to submit a market idea — question, up to 3 options, market type. Saved to Upstash Redis via `/api/suggestions`. |
+
+Suggestions are stored in **Upstash Redis** (serverless Redis, Vercel-native). No schema required.
+
+**Additional Vercel environment variables required for suggestions:**
+
+| Variable | Where to get it |
+|---|---|
+| `UPSTASH_REDIS_REST_URL` | Auto-added by Vercel when connecting an Upstash Redis database |
+| `UPSTASH_REDIS_REST_TOKEN` | Auto-added by Vercel when connecting an Upstash Redis database |
+
+To enable: go to your Vercel project → **Storage** → **Create Database** → **Upstash → Redis**, then connect it to the project.
+
+---
+
 ## Tech Stack
 
 | Layer | Technology |
@@ -288,6 +317,7 @@ npm run resolve
 | Resolver AI | OpenRouter |
 | Price data | CoinGecko public API |
 | News data | DuckDuckGo HTML scrape |
+| Suggestions DB | Upstash Redis (serverless, Vercel-native) |
 | Testnet | Ethereum Sepolia (chain ID 11155111) |
 | Hosting | Vercel |
 
