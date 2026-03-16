@@ -3,19 +3,23 @@
 import { useState } from "react";
 import { useWallet } from "../lib/WalletContext";
 import { getWriteContract } from "../lib/contract";
+import type { Suggestion } from "../app/api/suggestions/route";
 
 interface Props {
   onClose: () => void;
   onSuccess: () => void;
+  prefill?: Suggestion | null;
 }
 
-const EMPTY_OPTIONS = ["", ""];
-
-export function CreateMarketModal({ onClose, onSuccess }: Props) {
+export function CreateMarketModal({ onClose, onSuccess, prefill }: Props) {
   const { signer } = useWallet();
-  const [question, setQuestion] = useState("");
-  const [options, setOptions] = useState<string[]>(EMPTY_OPTIONS);
-  const [marketType, setMarketType] = useState<0 | 1>(0);
+  const [question, setQuestion] = useState(prefill?.question ?? "");
+  const [options, setOptions] = useState<string[]>(
+    prefill
+      ? [prefill.optionA, prefill.optionB, ...(prefill.optionC ? [prefill.optionC] : [])].filter(Boolean)
+      : ["", ""]
+  );
+  const [marketType, setMarketType] = useState<0 | 1>(prefill?.marketType === "PRICE" ? 1 : 0);
   const [deadlineDate, setDeadlineDate] = useState("");
   const [targetPriceUSD, setTargetPriceUSD] = useState("");
   const [ticker, setTicker] = useState("");

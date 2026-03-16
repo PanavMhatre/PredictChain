@@ -5,8 +5,11 @@ import { fetchAllMarkets, getReadContract, MarketData } from "../lib/contract";
 import { MarketCard } from "../components/MarketCard";
 import { WalletStats } from "../components/WalletStats";
 import { CreateMarketModal } from "../components/CreateMarketModal";
+import { SuggestMarketModal } from "../components/SuggestMarketModal";
+import { SuggestionsPanel } from "../components/SuggestionsPanel";
 import { useMarketEvents } from "../lib/useMarketEvents";
 import { useWallet } from "../lib/WalletContext";
+import type { Suggestion } from "./api/suggestions/route";
 
 export default function Home() {
   const { address } = useWallet();
@@ -15,6 +18,10 @@ export default function Home() {
   const [error, setError] = useState("");
   const [isOwner, setIsOwner] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
+  const [showSuggest, setShowSuggest] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [prefill, setPrefill] = useState<Suggestion | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -30,7 +37,7 @@ export default function Home() {
   useEffect(() => { load(); }, [load]);
   useMarketEvents(load);
 
-  // Check if connected wallet is the contract owner
+  // Check owner
   useEffect(() => {
     if (!address) { setIsOwner(false); return; }
     try {
@@ -43,6 +50,26 @@ export default function Home() {
     }
   }, [address]);
 
+  // Poll pending suggestions count for owner badge
+  useEffect(() => {
+    if (!isOwner) return;
+    async function fetchCount() {
+      try {
+        const res = await fetch("/api/suggestions");
+        const data: Suggestion[] = await res.json();
+        setPendingCount(data.filter((s) => s.status === "pending").length);
+      } catch { /* ignore */ }
+    }
+    fetchCount();
+    const interval = setInterval(fetchCount, 30000);
+    return () => clearInterval(interval);
+  }, [isOwner]);
+
+  function handleUseIdea(s: Suggestion) {
+    setPrefill(s);
+    setShowCreate(true);
+  }
+
   return (
     <div>
       <div className="page-header">
@@ -51,19 +78,37 @@ export default function Home() {
           <p className="page-subtitle">Stake ETH on outcomes. Winners split the pool.</p>
         </div>
         <div className="page-header-right">
-          {isOwner && (
-            <button className="btn btn-primary btn-create" onClick={() => setShowCreate(true)}>
-              + New Market
+          {isOwner ? (
+            <>
+              <button className="btn btn-outline btn-suggestions" onClick={() => setShowSuggestions(true)}>
+                Suggestions
+                {pendingCount > 0 && <span className="suggestions-badge">{pendingCount}</span>}
+              </button>
+              <button className="btn btn-primary btn-create" onClick={() => { setPrefill(null); setShowCreate(true); }}>
+                + New Market
+              </button>
+            </>
+          ) : address ? (
+            <button className="btn btn-outline btn-create" onClick={() => setShowSuggest(true)}>
+              + Suggest Market
             </button>
-          )}
+          ) : null}
           <WalletStats markets={markets} />
         </div>
       </div>
 
       {showCreate && (
         <CreateMarketModal
+          prefill={prefill}
           onClose={() => setShowCreate(false)}
           onSuccess={load}
+        />
+      )}
+      {showSuggest && <SuggestMarketModal onClose={() => setShowSuggest(false)} />}
+      {showSuggestions && (
+        <SuggestionsPanel
+          onClose={() => setShowSuggestions(false)}
+          onUseIdea={handleUseIdea}
         />
       )}
 
